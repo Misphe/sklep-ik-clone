@@ -1,51 +1,51 @@
+version: '3.8'
+
 services:
   mysql:
-    container_name: mysql    
-    platform: linux/amd64 
-    build:
-      context: ./../../..
-      dockerfile: ./shop/mysql.dockerfile
+    image: mysql:5.7
+    container_name: admin-mysql_db
+    platform: linux/amd64
     environment:
-      MYSQL_ROOT_PASSWORD: kocham_biznes
-      MYSQL_DATABASE: sklepik
+      MYSQL_DATABASE: BE_193237
+      MYSQL_ROOT_PASSWORD: student
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pstudent" ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
     networks:
-      - prestashop_network
-    volumes:
-      - ./dbdata:/var/lib/mysql
-      - ./dbdump:/var/lib/dbdump
-  
+      - admin-mysql_default
+    restart: unless-stopped
+
   phpmyadmin:
-    container_name: phpmyadmin    
-    platform: linux/amd64 
-    image: phpmyadmin:5.2.1
-    ports:
-      - 90:80
+    image: phpmyadmin/phpmyadmin
+    container_name: admin-phpmyadmin
+    platform: linux/amd64
     environment:
-      - PMA_HOST=mysql
-      - PMA_USER=root
-      - PMA_PASSWORD=kocham_biznes
-    networks:
-      - prestashop_network
+      PMA_HOST: admin-mysql_db
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+    ports:
+      - 8081:80
     depends_on:
-      - mysql
-  
+      mysql:
+        condition: service_healthy
+    networks:
+      - admin-mysql_default
+    restart: unless-stopped
+
   prestashop:
     container_name: prestashop
-    platform: linux/amd64 
-    build:
-      context: ./../../..
-      dockerfile: ./shop/presta.dockerfile
-    volumes:
-      - ./back-src:/var/www/back-src
-    depends_on:
-      - mysql
+    image: arivaldi/sklepik-prestashop:5.0
+    platform: linux/amd64
     ports:
       - 19323:443
+    entrypoint: [ "bash", "/entrypoint.sh" ]
     environment:
-      DB_SERVER: mysql
-      DB_NAME: sklepik
+      DB_SERVER: admin-mysql_db
+      DB_NAME: BE_193237
       DB_USER: root
-      DB_PASSWD: kocham_biznes
+      DB_PASSWD: student
       PS_LANGUAGE: ${PS_LANGUAGE:-pl}
       PS_COUNTRY: ${PS_COUNTRY:-pl}
       PS_DOMAIN: localhost:19323
@@ -57,7 +57,19 @@ services:
       ADMIN_MAIL: admin@admin.com
       ADMIN_PASSWD: admin
     networks:
-      - prestashop_network
+      - admin-mysql_default
+    depends_on:
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
 
 networks:
-  prestashop_network:
+  admin-mysql_default:
